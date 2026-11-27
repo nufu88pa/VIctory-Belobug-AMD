@@ -149,11 +149,20 @@ fn gta_kbm() -> bool {
 #[cfg(windows)]
 fn mouse_sens() -> f32 {
     static SENS: LazyLock<f32> = LazyLock::new(|| {
-        std::env::var("VICTORY_MOUSE_SENS")
-            .ok()
-            .and_then(|s| s.trim().parse::<f32>().ok())
-            .filter(|v| v.is_finite() && *v > 0.0)
-            .unwrap_or(1.0)
+        let Some(value) = std::env::var_os("VICTORY_MOUSE_SENS") else {
+            return 1.0;
+        };
+        if let Some(sens) = value.to_str().and_then(|v| v.trim().parse::<f32>().ok())
+            && sens.is_finite()
+            && sens > 0.0
+        {
+            return sens;
+        }
+        tracing::warn!(
+            ?value,
+            "VICTORY_MOUSE_SENS expects a positive finite number. Using 1.0"
+        );
+        1.0
     });
     *SENS
 }

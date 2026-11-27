@@ -235,7 +235,17 @@ extern "system" fn create_queue(
 extern "system" fn set_staging_buffer_size(_: Factory, size: u32) -> HRESULT {
     static FLOOR_MB: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
     let floor = *FLOOR_MB.get_or_init(|| {
-        std::env::var("VICTORY_DSTORAGE_STAGING_MB").ok().and_then(|v| v.trim().parse::<u64>().ok()).unwrap_or(0)
+        let Some(value) = std::env::var_os("VICTORY_DSTORAGE_STAGING_MB") else {
+            return 0;
+        };
+        if let Some(floor) = value.to_str().and_then(|v| v.trim().parse::<u64>().ok()) {
+            return floor;
+        }
+        tracing::warn!(
+            ?value,
+            "VICTORY_DSTORAGE_STAGING_MB expects a whole number of MiB. Using the title's requested size"
+        );
+        0
     }) << 20;
     tracing::info!(size, floor, "dstorage: staging buffer size");
     if let Some(scheduler) = scheduler() {

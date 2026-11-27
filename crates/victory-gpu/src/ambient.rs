@@ -133,9 +133,29 @@ fn settle() -> Option<Settle> {
     *SET.get_or_init(|| {
         // Default on (250 ms, jump factor 3: reports/LIGHT-POPIN.md); `0`
         // gives the old 0.04 of the way a frame.
-        let set = std::env::var("VICTORY_AMBIENT_SETTLE").unwrap_or_else(|_| "250,3".to_owned());
+        let set = match std::env::var("VICTORY_AMBIENT_SETTLE") {
+            Ok(value) => value,
+            Err(std::env::VarError::NotPresent) => "250,3".to_owned(),
+            Err(std::env::VarError::NotUnicode(value)) => {
+                tracing::warn!(
+                    ?value,
+                    "VICTORY_AMBIENT_SETTLE is not Unicode. Using 250,3"
+                );
+                "250,3".to_owned()
+            }
+        };
         let mut parts = set.split(',').map(|p| p.trim().parse::<f32>().ok());
-        let ms = parts.next().flatten().filter(|v| v.is_finite() && *v > 0.0)?;
+        let ms = match parts.next().flatten() {
+            Some(0.0) => return None,
+            Some(ms) if ms.is_finite() && ms > 0.0 => ms,
+            _ => {
+                tracing::warn!(
+                    value = ?set,
+                    "invalid VICTORY_AMBIENT_SETTLE time constant. Using the legacy per-frame rate"
+                );
+                return None;
+            }
+        };
         let jump = parts.next().flatten().filter(|v| v.is_finite() && *v >= 0.0).unwrap_or(3.0);
         let fresh = parts.next().flatten().filter(|v| v.is_finite() && *v >= 0.0).unwrap_or(0.0);
         tracing::info!(
