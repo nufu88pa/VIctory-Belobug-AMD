@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use victory_shader::emit::host::{self, Host};
 use victory_shader::emit::{self, validator::Validator};
 use victory_shader::structure::{self, Atom, LaneExit};
@@ -415,6 +415,9 @@ pub fn run(
 
 /// Every shader found into the cache runs translate from.
 pub fn precompile(paths: Vec<PathBuf>, jobs: Option<usize>, list: Option<PathBuf>) -> Result<()> {
+    if let Some(list) = &list {
+        victory_core::ensure_outside_repo(list).context("--list destination")?;
+    }
     let cfg = victory_core::Config::load()?;
     victory_hle::modules::d3d12x::use_shader_cache(cfg.cache_subdir("shaders")?);
     let paths = crate::default_paths(paths)?;

@@ -405,6 +405,8 @@ fn ours() -> bool {
 
 impl Recorder {
     fn new(settings: Settings) -> std::io::Result<Recorder> {
+        victory_core::ensure_outside_repo(&settings.folder)
+            .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, error))?;
         std::fs::create_dir_all(&settings.folder)?;
         let mut n = 1;
         let folder = loop {
@@ -2733,6 +2735,26 @@ const _: () = assert!(ALL == D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES);
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn recorder_rejects_a_destination_inside_the_source_tree() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(root.path().join(victory_core::policy::ROOT_MARKER), "").unwrap();
+        let folder = root.path().join("captures");
+        let settings = Settings {
+            folder: folder.clone(),
+            at: At::Trigger,
+            frames: 1,
+            always: false,
+        };
+
+        let Err(error) = Recorder::new(settings) else {
+            panic!("expected a policy error");
+        };
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
+        assert!(error.to_string().contains("inside the VIctory source tree"));
+        assert!(!folder.exists());
+    }
 
     #[test]
     fn when_to_record() {

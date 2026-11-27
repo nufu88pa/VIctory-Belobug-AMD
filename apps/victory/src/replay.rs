@@ -307,6 +307,7 @@ pub(crate) fn run(r: Replay) -> Result<()> {
         return player.slots(list, command, &mut |line| println!("{line}"));
     }
     if let Some(folder) = &r.images {
+        victory_core::ensure_outside_repo(folder).context("--images destination")?;
         let mut which = Vec::new();
         for text in &r.texture {
             let (id, sub) = text.split_once('.').unwrap_or((text, "0"));
@@ -436,8 +437,11 @@ pub(crate) fn run(r: Replay) -> Result<()> {
 /// Translates the capture's shaders into `into`.
 fn retranslate(folder: &std::path::Path, into: &std::path::Path, view_limit: u32, raw_views: u32) -> Result<()> {
     use std::sync::atomic::{AtomicUsize, Ordering};
-    let wanted = play::title_shaders(folder)?;
-    let kept = play::find(folder)?.with_file_name("containers");
+    victory_core::ensure_outside_repo(into).context("--retranslate destination")?;
+    let capture = play::find(folder)?;
+    let kept = capture.with_file_name("containers");
+    victory_core::ensure_outside_repo(&kept).context("replay shader container directory")?;
+    let wanted = play::title_shaders(&capture)?;
     std::fs::create_dir_all(&kept)?;
     std::fs::create_dir_all(into)?;
     let mut missing: std::collections::HashSet<&str> = wanted
