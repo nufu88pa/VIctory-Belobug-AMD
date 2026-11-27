@@ -40,6 +40,10 @@ buffers, until it is done.
 
 ## Running it
 
+Keep capture folders and replay outputs outside the source tree. This
+includes the replay picture, shader dumps and resource dumps from divergence
+analysis.
+
     victory replay <folder> [--loops 5] [--timing detailed] [experiments]
 
 `<folder>` is the one given as `VICTORY_RECORD` (its last capture) or a

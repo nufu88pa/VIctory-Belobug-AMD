@@ -1306,6 +1306,7 @@ impl Player {
             .map(|&p| reader.bytes(&reader.parts[p]).to_vec())
             .collect();
         let to = self.folder.join("diverge");
+        victory_core::ensure_outside_repo(&to).context("--diverge output directory")?;
         let _ = std::fs::create_dir_all(&to);
         for (k, &p) in parts.iter().enumerate().take(12) {
             let part = &reader.parts[p];

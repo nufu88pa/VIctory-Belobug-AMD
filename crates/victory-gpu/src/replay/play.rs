@@ -144,6 +144,15 @@ impl Default for Options {
 }
 
 impl Options {
+    fn picture_path(&self, capture: &Path) -> Result<PathBuf> {
+        let path = self
+            .image
+            .clone()
+            .unwrap_or_else(|| capture.join("replay.png"));
+        victory_core::ensure_outside_repo(&path).context("replay picture destination")?;
+        Ok(path)
+    }
+
     fn edited(&self) -> bool {
         self.no_barriers
             || self.merge_barriers
@@ -394,9 +403,10 @@ fn title_hash(p: &wire::Pipeline, blob: u32) -> Option<&str> {
 /// in the capture, and the pipelines' descriptions; what was written.
 pub fn dump(folder: &Path, text: &str) -> Result<Vec<String>> {
     let folder = find(folder)?;
+    let to = folder.join("shaders");
+    victory_core::ensure_outside_repo(&to).context("--dump destination")?;
     let frame = Frame::read(&folder.join("frame.bin"))?;
     let file = File::open(folder.join("shaders.bin"))?;
-    let to = folder.join("shaders");
     std::fs::create_dir_all(&to)?;
     let mut out = Vec::new();
     for p in frame.pipelines.iter().filter(|p| p.name.contains(text)) {
@@ -3284,10 +3294,7 @@ impl Player {
                 .push("the presented format is not shown".into());
             return Ok(());
         };
-        let path = o
-            .image
-            .clone()
-            .unwrap_or_else(|| self.folder.join("replay.png"));
+        let path = o.picture_path(&self.folder)?;
         std::fs::write(&path, crate::capture::png(p.width, p.height, &rgb))?;
         let mut recorded = vec![0; bytes.len()];
         read_at(
@@ -3540,6 +3547,43 @@ fn debug_messages(q: &ID3D12InfoQueue) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn replay_pictures_require_an_output_outside_the_source_tree() {
+        let root = tempfile::tempdir().unwrap();
+        let source = root.path().join("source");
+        std::fs::create_dir(&source).unwrap();
+        std::fs::write(source.join(victory_core::policy::ROOT_MARKER), "").unwrap();
+
+        let mut options = Options::default();
+        assert!(options.picture_path(&source).is_err());
+        assert_eq!(
+            options.picture_path(root.path()).unwrap(),
+            root.path().join("replay.png")
+        );
+
+        options.image = Some(source.join("custom.png"));
+        assert!(options.picture_path(root.path()).is_err());
+
+        let outside = root.path().join("custom.png");
+        options.image = Some(outside.clone());
+        assert_eq!(options.picture_path(&source).unwrap(), outside);
+    }
+
+    #[test]
+    fn shader_dump_rejects_an_output_inside_the_source_tree() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(root.path().join(victory_core::policy::ROOT_MARKER), "").unwrap();
+        // Enough for find() to identify the capture without a real frame.
+        std::fs::write(root.path().join("frame.bin"), "").unwrap();
+
+        let error = dump(root.path(), "test").unwrap_err();
+        assert!(matches!(
+            error.downcast_ref::<victory_core::PolicyError>(),
+            Some(victory_core::PolicyError::InsideRepo { .. })
+        ));
+        assert!(!root.path().join("shaders").exists());
+    }
 
     #[test]
     fn captures_are_found() {
